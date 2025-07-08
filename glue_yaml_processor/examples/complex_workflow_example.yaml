@@ -1,0 +1,99 @@
+version: "1.0"
+
+connection:
+  glue_connection_name: "my-mysql-connection"
+  region: "ap-northeast-1"
+
+task_groups:
+  - name: "data_preparation"
+    execution_mode: "sequential"
+    enabled: true
+    tasks:
+      - name: "cleanup_staging_tables"
+        type: "sql_query"
+        enabled: true
+        config:
+          query: "TRUNCATE TABLE staging_customers"
+          params: []
+          fetch_results: false
+          stop_on_failure: true
+          
+      - name: "load_customer_data"
+        type: "sql_query"
+        enabled: true
+        config:
+          query: |
+            INSERT INTO staging_customers 
+            SELECT * FROM external_customers 
+            WHERE last_updated >= CURDATE() - INTERVAL 1 DAY
+          params: []
+          fetch_results: false
+          stop_on_failure: true
+
+  - name: "data_processing"
+    execution_mode: "parallel"
+    max_workers: 3
+    enabled: true
+    tasks:
+      - name: "upsert_customers"
+        type: "upsert"
+        enabled: true
+        config:
+          source_table: "staging_customers"
+          target_table: "customers"
+          primary_key: "customer_id"
+          checksum_columns:
+            - "first_name"
+            - "last_name"
+            - "email"
+            - "phone"
+            - "address"
+            - "city"
+            - "state"
+            - "zip_code"
+          checksum_column_name: "checksum_val"
+          
+      - name: "update_customer_segments"
+        type: "stored_procedure"
+        enabled: true
+        config:
+          name: "update_customer_segments"
+          args: []
+          stop_on_failure: false
+          
+      - name: "refresh_customer_analytics"
+        type: "stored_procedure"
+        enabled: true
+        config:
+          name: "refresh_customer_analytics"
+          args: []
+          stop_on_failure: false
+
+  - name: "post_processing"
+    execution_mode: "sequential"
+    enabled: true
+    tasks:
+      - name: "validate_data_quality"
+        type: "sql_query"
+        enabled: true
+        config:
+          query: |
+            SELECT 
+              COUNT(*) as total_customers,
+              COUNT(DISTINCT customer_id) as unique_customers,
+              COUNT(CASE WHEN email IS NULL THEN 1 END) as missing_emails
+            FROM customers
+          params: []
+          fetch_results: true
+          stop_on_failure: false
+          
+      - name: "update_process_log"
+        type: "sql_query"
+        enabled: true
+        config:
+          query: |
+            INSERT INTO process_log (process_name, status, execution_time)
+            VALUES ('customer_data_sync', 'completed', NOW())
+          params: []
+          fetch_results: false
+          stop_on_failure: false

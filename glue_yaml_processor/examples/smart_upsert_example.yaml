@@ -1,0 +1,28 @@
+version: "1.0"
+
+connection:
+  glue_connection_name: "my-mysql-connection"
+  region: "ap-northeast-1"
+
+task_groups:
+  - name: "customer_data_upsert"
+    execution_mode: "sequential"
+    enabled: true
+    tasks:
+      - name: "upsert_customer_data"
+        type: "upsert"
+        enabled: true
+        config:
+          source_table: "staging_customers"
+          target_table: "customers"
+          primary_key: "customer_id"
+          checksum_columns:
+            - "first_name"
+            - "last_name"
+            - "email"
+            - "phone"
+            - "address"
+            - "city"
+            - "state"
+            - "zip_code"
+          checksum_column_name: "checksum_val"

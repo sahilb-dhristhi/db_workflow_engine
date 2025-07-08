@@ -1,0 +1,27 @@
+version: "1.0"
+
+connection:
+  glue_connection_name: "my-mysql-connection"
+  region: "ap-northeast-1"
+
+task_groups:
+  - name: "parallel_stored_procedures"
+    execution_mode: "parallel"
+    max_workers: 2
+    enabled: true
+    tasks:
+      - name: "execute_proc1"
+        type: "stored_procedure"
+        enabled: true
+        config:
+          name: "update_customer_stats"
+          args: []
+          stop_on_failure: false
+          
+      - name: "execute_proc2"
+        type: "stored_procedure"
+        enabled: true
+        config:
+          name: "refresh_materialized_views"
+          args: []
+          stop_on_failure: false
